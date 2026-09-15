@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SML3004 YAP - Marker Unlock</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.5;color:#222}.card{margin-top:28px;padding:24px;border:1px solid #ccc;border-radius:10px}label{display:block;font-weight:600;margin:16px 0 7px}input[type=password]{width:140px;padding:10px;font-size:18px;letter-spacing:6px}button{margin-top:20px;padding:11px 18px;font-size:16px;cursor:pointer}.status{margin-top:14px;font-weight:600}.error{color:#a00000}.success{color:#176b2c}video{display:none;width:100%;margin-top:22px;background:#000}</style>
+</head>
+<body>
+<h1>SML3004 - Marker</h1>
+<p>Unlock a protected Year Abroad recording.</p>
+<div class="card">
+<label for="protectedFile">Protected recording (.sml3004)</label>
+<input id="protectedFile" type="file" accept=".sml3004,application/octet-stream">
+<label for="pinNumber">PIN Number</label>
+<input id="pinNumber" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits">
+<br><button id="unlockButton" type="button">Unlock Recording</button>
+<div id="status" class="status" aria-live="polite"></div>
+<video id="player" controls></video>
+</div>
+<p><a href="index.html">Student: Protect Recording</a></p>
+<script>
+const fileInput=document.getElementById('protectedFile');const pinInput=document.getElementById('pinNumber');const button=document.getElementById('unlockButton');const statusEl=document.getElementById('status');const player=document.getElementById('player');let currentUrl=null;
+pinInput.addEventListener('input',()=>{pinInput.value=pinInput.value.replace(/\D/g,'').slice(0,4)});
+function base64ToBytes(s){const raw=atob(s);return Uint8Array.from(raw,c=>c.charCodeAt(0))}
+async function deriveKey(pin,salt,iterations){const enc=new TextEncoder();const material=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['decrypt'])}
+button.addEventListener('click',async()=>{statusEl.className='status';statusEl.textContent='';player.style.display='none';const file=fileInput.files[0];const pin=pinInput.value;if(!file){statusEl.classList.add('error');statusEl.textContent='Please select the protected recording.';return}if(!/^\d{4}$/.test(pin)){statusEl.classList.add('error');statusEl.textContent='Please enter the four-digit PIN Number.';return}try{button.disabled=true;statusEl.textContent='Unlocking recording...';const buffer=await file.arrayBuffer();const bytes=new Uint8Array(buffer);let newline=-1;for(let i=0;i<bytes.length;i++){if(bytes[i]===10){newline=i;break}}if(newline<0)throw new Error('Invalid file');const header=JSON.parse(new TextDecoder().decode(bytes.slice(0,newline)));if(header.format!=='SML3004-YAP'||header.version!==1)throw new Error('Invalid file');const salt=base64ToBytes(header.salt);const iv=base64ToBytes(header.iv);const key=await deriveKey(pin,salt,header.iterations||250000);const decrypted=await crypto.subtle.decrypt({name:'AES-GCM',iv},key,bytes.slice(newline+1));if(currentUrl)URL.revokeObjectURL(currentUrl);currentUrl=URL.createObjectURL(new Blob([decrypted],{type:header.mime||'video/webm'}));player.src=currentUrl;player.style.display='block';statusEl.classList.add('success');statusEl.textContent='Recording unlocked.'}catch(e){console.error(e);statusEl.classList.add('error');statusEl.textContent='Unable to unlock. Check that the file and PIN Number are correct.'}finally{button.disabled=false}});
+</script>
+</body>
+</html>
