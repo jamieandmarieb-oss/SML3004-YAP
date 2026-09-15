@@ -1,34 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SML3004 YAP</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 760px; margin: 40px auto; padding: 0 20px; line-height: 1.5; }
-    .pin-section { margin-top: 32px; padding-top: 20px; border-top: 1px solid #ddd; }
-    .pin-section label { display: block; font-weight: 600; margin-bottom: 8px; }
-    #pinNumber { width: 130px; padding: 10px; font-size: 18px; letter-spacing: 6px; }
-    #pinMessage { margin-top: 8px; font-size: 14px; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SML3004 YAP - Protect Recording</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.5;color:#222}h1{margin-bottom:4px}.card{margin-top:28px;padding:24px;border:1px solid #ccc;border-radius:10px}label{display:block;font-weight:600;margin:16px 0 7px}input[type=file]{max-width:100%}input[type=password]{width:140px;padding:10px;font-size:18px;letter-spacing:6px}button{margin-top:20px;padding:11px 18px;font-size:16px;cursor:pointer}.note{font-size:14px;color:#555}.status{margin-top:14px;font-weight:600}.error{color:#a00000}.success{color:#176b2c}</style>
 </head>
 <body>
-  <h1>SML3004 - Video Post</h1>
-  <p>Reflection on your YA</p>
-
-  <div class="pin-section">
-    <label for="pinNumber">PIN Number</label>
-    <input id="pinNumber" name="pinNumber" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits" aria-describedby="pinMessage">
-    <div id="pinMessage">Enter a 4-digit PIN Number.</div>
-  </div>
-
-  <script>
-    const pin = document.getElementById('pinNumber');
-    const message = document.getElementById('pinMessage');
-    pin.addEventListener('input', () => {
-      pin.value = pin.value.replace(/\D/g, '').slice(0, 4);
-      message.textContent = pin.value.length === 4 ? 'PIN Number entered.' : 'Enter a 4-digit PIN Number.';
-    });
-  </script>
+<h1>SML3004 - Video Post</h1>
+<p>Reflection on your YA</p>
+<div class="card">
+<h2>Protect your recording</h2>
+<p>Select your completed WebM recording and create a four-digit PIN Number. Your recording will be encrypted in this browser before the protected copy is downloaded.</p>
+<label for="videoFile">Recording (.webm)</label>
+<input id="videoFile" type="file" accept="video/webm,.webm">
+<label for="pinNumber">PIN Number</label>
+<input id="pinNumber" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" autocomplete="off" placeholder="4 digits">
+<p class="note">Keep your PIN Number separately. The protected recording cannot be opened without the correct PIN.</p>
+<button id="protectButton" type="button">Protect &amp; Download Recording</button>
+<div id="status" class="status" aria-live="polite"></div>
+</div>
+<p><a href="marker.html">Marker: Unlock Recording</a></p>
+<script>
+const fileInput=document.getElementById('videoFile');const pinInput=document.getElementById('pinNumber');const statusEl=document.getElementById('status');const button=document.getElementById('protectButton');
+pinInput.addEventListener('input',()=>{pinInput.value=pinInput.value.replace(/\D/g,'').slice(0,4)});
+function bytesToBase64(bytes){let s='';for(let i=0;i<bytes.length;i++)s+=String.fromCharCode(bytes[i]);return btoa(s)}
+async function deriveKey(pin,salt){const enc=new TextEncoder();const material=await crypto.subtle.importKey('raw',enc.encode(pin),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:250000,hash:'SHA-256'},material,{name:'AES-GCM',length:256},false,['encrypt'])}
+button.addEventListener('click',async()=>{statusEl.className='status';statusEl.textContent='';const file=fileInput.files[0];const pin=pinInput.value;if(!file){statusEl.classList.add('error');statusEl.textContent='Please select your WebM recording.';return}if(!/^\d{4}$/.test(pin)){statusEl.classList.add('error');statusEl.textContent='Please enter exactly four digits for the PIN Number.';return}try{button.disabled=true;statusEl.textContent='Protecting recording...';const salt=crypto.getRandomValues(new Uint8Array(16));const iv=crypto.getRandomValues(new Uint8Array(12));const key=await deriveKey(pin,salt);const plain=await file.arrayBuffer();const encrypted=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,plain);const header={format:'SML3004-YAP',version:1,algorithm:'AES-GCM',kdf:'PBKDF2-SHA256',iterations:250000,salt:bytesToBase64(salt),iv:bytesToBase64(iv),originalName:file.name,mime:file.type||'video/webm'};const headerBytes=new TextEncoder().encode(JSON.stringify(header)+'\n');const blob=new Blob([headerBytes,encrypted],{type:'application/octet-stream'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=file.name.replace(/\.webm$/i,'')+'.sml3004';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);statusEl.classList.add('success');statusEl.textContent='Protected recording downloaded. Give the .sml3004 file to your marker and provide the PIN separately.'}catch(e){console.error(e);statusEl.classList.add('error');statusEl.textContent='The recording could not be protected in this browser.'}finally{button.disabled=false}});
+</script>
 </body>
 </html>
